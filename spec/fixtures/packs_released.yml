@@ -1,0 +1,28 @@
+schema_version: 1
+packs:
+  demo:
+    summary: A released pack, for specs.
+    built_from:
+      - fixtures
+    release:
+      tag: demo-v1
+      released_on: "2026-09-06"
+      term_count: 9
+      dictionary:
+        url: https://example.test/releases/download/demo-v1/dictionary.tsv
+        sha256: 8e9eb6064a918e1187b2a68b251e72ca6682d8373b3d1866816342841ad2fee3
+      protected:
+        url: https://example.test/releases/download/demo-v1/protected.txt
+        sha256: c7443ceb42f8a14f8d64ee4581c5c397dfc2ffd6aa02ebf4b07cfdf26325849a
+      defaults:
+        edit_distance: 2
+        frequency_threshold: 5.0
+  dictionary_only:
+    summary: A released pack with no protected-terms file.
+    release:
+      tag: dictionary-only-v1
+      dictionary:
+        url: https://example.test/releases/download/dictionary-only-v1/dictionary.tsv
+  unreleased:
+    summary: A registered but unpublished pack.
+    release: null

@@ -1,0 +1,4 @@
+# Gene and target symbols - never "corrected" into a dictionary word
+CDK10
+BRCA1
+IL6

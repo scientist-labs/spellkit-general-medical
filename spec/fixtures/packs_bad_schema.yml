@@ -1,0 +1,4 @@
+schema_version: 99
+packs:
+  demo:
+    summary: From a future gem version.
