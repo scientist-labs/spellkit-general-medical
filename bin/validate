@@ -1,0 +1,114 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Tune a pack against a held-out corpus of real misspellings.
+#
+#   bin/validate --dictionary path/to/dictionary.tsv [--protected path/to/protected.txt]
+#
+# Prints one row per (edit_distance, frequency_threshold) and recommends the config with
+# the best recall whose error rate clears --max-error-rate. Those two numbers are what
+# ships in data/packs.yml; the corpus itself never leaves this machine (corpus/README.md).
+
+$stdout.sync = true
+
+require "optparse"
+require_relative "../validation/corpus"
+require_relative "../validation/sweep"
+
+options = {
+  corpus: Validation::Corpus::DEFAULT_PATH,
+  max_error_rate: 0.02
+}
+
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: bin/validate --dictionary PATH [options]"
+  opts.on("--dictionary PATH", "Dictionary TSV to score (required)") { options[:dictionary] = _1 }
+  opts.on("--protected PATH", "Protected-terms file to load alongside it") { options[:protected] = _1 }
+  opts.on("--corpus PATH", "Corpus TSV (default: #{Validation::Corpus::DEFAULT_PATH})") { options[:corpus] = _1 }
+  opts.on("--max-error-rate F", Float, "Harm ceiling for the recommendation (default 0.02)") do
+    options[:max_error_rate] = _1
+  end
+  opts.on("-h", "--help") { puts opts; exit }
+end
+parser.parse!
+
+unless options[:dictionary]
+  warn parser
+  exit 1
+end
+
+unless File.exist?(options[:dictionary])
+  abort "Dictionary not found: #{options[:dictionary]}"
+end
+
+corpus = begin
+  Validation::Corpus.load(options[:corpus])
+rescue Validation::Corpus::MissingError => e
+  abort e.message
+end
+
+puts "corpus:     #{corpus.path} (#{corpus.size} pairs)"
+puts "dictionary: #{options[:dictionary]}"
+puts
+
+sweep = Validation::Sweep.new(
+  dictionary: options[:dictionary],
+  protected_path: options[:protected],
+  corpus: corpus
+)
+
+outcomes = sweep.run { |config| warn "  scoring #{config}..." }
+
+pct = ->(f) { format("%6.2f%%", f * 100) }
+puts
+puts format("%-4s %-10s %8s %8s %7s %7s %7s", "ed", "threshold", "recall", "err rate", "hit", "miss", "wrong")
+puts "-" * 56
+outcomes.each do |outcome|
+  r = outcome.report
+  puts format("%-4d %-10s %8s %8s %7d %7d %7d",
+    outcome.config.edit_distance, outcome.config.frequency_threshold,
+    pct.call(r.recall), pct.call(r.error_rate), r.hit, r.miss, r.wrong)
+end
+
+first = outcomes.first.report
+puts
+puts "Corpus shape (same for every config - these move with the DICTIONARY, not the tuning):"
+puts "  scorable pairs        #{first.scored} of #{first.total} (#{pct.call(first.coverage)})"
+puts "  target not in dict    #{first.unreachable}"
+puts "  variant already valid #{first.shadowed}"
+puts format("  beyond edit distance 2  %s of scorable pairs - the hard ceiling on recall for any",
+  pct.call(first.beyond_edit_distance_2))
+puts "                          edit-distance corrector; if this is large, a phonetic fallback"
+puts "                          in spellkit's Rust core is worth proposing (PLAN.md)."
+
+best = Validation::Sweep.recommend(outcomes, max_error_rate: options[:max_error_rate])
+puts
+if best
+  puts "Recommended (best recall with error rate <= #{pct.call(options[:max_error_rate]).strip}):"
+  puts "  #{best.config}"
+  puts "  recall #{pct.call(best.report.recall)}, error rate #{pct.call(best.report.error_rate)}"
+  puts
+  puts "  data/packs.yml:"
+  puts "    defaults:"
+  puts "      edit_distance: #{best.config.edit_distance}"
+  puts "      frequency_threshold: #{best.config.frequency_threshold}"
+else
+  puts "No config cleared the #{pct.call(options[:max_error_rate]).strip} error ceiling."
+  puts "Raise --max-error-rate deliberately, or fix the dictionary's frequencies first."
+end
+
+if best && best.report.wrong.positive?
+  load_options = {
+    dictionary: options[:dictionary],
+    edit_distance: best.config.edit_distance,
+    frequency_threshold: best.config.frequency_threshold
+  }
+  load_options[:protected_path] = options[:protected] if options[:protected]
+
+  checker = SpellKit::Checker.new.load!(**load_options)
+  examples = Validation::Harness.new(checker: checker, corpus: corpus).run.wrong_examples
+
+  puts
+  puts "Sample wrong corrections at the recommended config (typo -> got, wanted):"
+  examples.first(10).each { |typo, got, wanted| puts "  #{typo} -> #{got}, wanted #{wanted}" }
+end

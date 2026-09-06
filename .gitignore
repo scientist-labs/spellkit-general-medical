@@ -5,3 +5,9 @@
 Gemfile.lock
 *.gem
 .DS_Store
+
+# UMLS-derived validation corpus. CHV ships only inside the gated UMLS Metathesaurus
+# release, so it may be USED here by a licence holder but never redistributed - which
+# committing it would do. bin/fetch_chv rebuilds it; corpus/README.md explains how.
+/corpus/*
+!/corpus/README.md

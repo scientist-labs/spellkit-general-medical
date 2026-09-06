@@ -1,0 +1,11 @@
+C0001|ENG|P|L1|PF|S1|Y|A1||||RXNORM|BN|200|Flexeril|0||
+C0001|ENG|P|L2|PF|S2|Y|A2||||RXNORM|IN|100|Cyclobenzaprine|0||
+C0001|ENG|P|L3|PF|S3|Y|A3||||CHV|PT|900|flexerol|0||
+C0002|ENG|P|L4|PF|S4|Y|A4||||RXNORM|IN|300|Acetaminophen|0||
+C0002|ENG|P|L5|PF|S5|Y|A5||||CHV|PT|901|acetominophen|0||
+C0002|ENG|P|L6|PF|S6|Y|A6||||CHV|PT|902|Acetaminophen|0||
+C0003|ENG|P|L7|PF|S7|Y|A7||||CHV|PT|903|psoriaisis|0||
+C0004|ENG|P|L8|PF|S8|Y|A8||||RXNORM|IN|400|Ibuprofen|0||
+C0004|ENG|P|L9|PF|S9|Y|A9||||CHV|PT|904|ibuprophen|0|Y|
+C0005|ENG|P|LA|PF|SA|Y|AA||||RXNORM|BN|500|Advil|0||
+C0005|ENG|P|LB|PF|SB|Y|AB||||CHV|PT|905|advill|0||

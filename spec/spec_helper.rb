@@ -3,6 +3,7 @@
 require "spellkit-dictionaries"
 require "webmock/rspec"
 require "tmpdir"
+require "tempfile"
 require "fileutils"
 
 module PackSpecHelpers

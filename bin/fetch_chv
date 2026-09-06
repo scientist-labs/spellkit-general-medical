@@ -1,0 +1,133 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Build the held-out validation corpus from NLM's Consumer Health Vocabulary.
+#
+#   UMLS_API_KEY=... bin/fetch_chv                       # download the release, then build
+#   bin/fetch_chv --mrconso /path/to/MRCONSO.RRF         # build from a file you already have
+#
+# Writes corpus/chv_drug_misspellings.tsv, which is gitignored on purpose: CHV ships only
+# inside the gated UMLS Metathesaurus release, so a licence holder may USE it here but may
+# not redistribute it. See corpus/README.md.
+#
+# The join mirrors Substrate's own (ingest/chv/parser.rb, silver_chv_misspelling.sql) so
+# the two agree: MRCONSO carries both the CHV consumer strings and the RXNORM atoms, and a
+# CHV atom and an RXNORM atom for the same concept share a CUI.
+#
+# MRCONSO.RRF columns (pipe-delimited, no header):
+#   CUI|LAT|TS|LUI|STT|SUI|ISPREF|AUI|SAUI|SCUI|SDUI|SAB|TTY|CODE|STR|SRL|SUPPRESS|CVF
+
+require "optparse"
+require "fileutils"
+require "net/http"
+require "openssl"
+require "uri"
+
+require_relative "../validation/chv_source"
+
+options = {
+  version: "2025AB",
+  output: File.expand_path("../corpus/chv_drug_misspellings.tsv", __dir__),
+  cache: File.expand_path("../tmp/umls", __dir__)
+}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: bin/fetch_chv [options]"
+  opts.on("--mrconso PATH", "Use an already-extracted MRCONSO.RRF (skips the download)") { options[:mrconso] = _1 }
+  opts.on("--umls-version V", "UMLS release to pull (default #{options[:version]})") { options[:version] = _1 }
+  opts.on("--output PATH", "Corpus file to write (default corpus/chv_drug_misspellings.tsv)") { options[:output] = _1 }
+  opts.on("--cache PATH", "Where to keep the download (default tmp/umls)") { options[:cache] = _1 }
+  opts.on("-h", "--help") { puts opts; exit }
+end.parse!
+
+# --- acquisition ------------------------------------------------------------------
+
+def download(url, destination)
+  FileUtils.mkdir_p(File.dirname(destination))
+  partial = "#{destination}.partial"
+  written = 0
+
+  fetch = lambda do |current, redirects_left|
+    uri = URI.parse(current)
+    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https",
+      open_timeout: 15, read_timeout: 120,
+      verify_mode: OpenSSL::SSL::VERIFY_PEER) do |http|
+      http.request(Net::HTTP::Get.new(uri.request_uri)) do |response|
+        case response
+        when Net::HTTPRedirection
+          abort "Too many redirects fetching the UMLS release" if redirects_left.zero?
+          location = response["location"] or abort "Redirect carried no Location header"
+          return fetch.call(URI.join(current, location).to_s, redirects_left - 1)
+        when Net::HTTPSuccess
+          File.open(partial, "wb") do |file|
+            response.read_body do |chunk|
+              file.write(chunk)
+              written += chunk.bytesize
+              warn format("\r  %.1f GB", written / 1024.0**3) if (written / (50 * 1024 * 1024)) != ((written - chunk.bytesize) / (50 * 1024 * 1024))
+            end
+          end
+        when Net::HTTPUnauthorized, Net::HTTPForbidden
+          abort "UMLS rejected the request (#{response.code}). Check UMLS_API_KEY and that " \
+                "your licence covers this release."
+        else
+          abort "Download failed: #{response.code} #{response.message}"
+        end
+      end
+    end
+  end
+
+  fetch.call(url, 5)
+  warn ""
+  File.rename(partial, destination)
+  destination
+end
+
+mrconso = options[:mrconso]
+
+if mrconso.nil?
+  key = ENV["UMLS_API_KEY"].to_s.strip
+  if key.empty?
+    abort "UMLS_API_KEY is not set. CHV ships only inside the gated UMLS Metathesaurus " \
+          "release - there is no keyless fallback. Sign up at " \
+          "https://uts.nlm.nih.gov/uts/signup-login, or pass --mrconso if you already have " \
+          "MRCONSO.RRF. See corpus/README.md."
+  end
+
+  version = options[:version]
+  member = "#{version}/META/MRCONSO.RRF"
+  release = "https://download.nlm.nih.gov/umls/kss/#{version}/umls-#{version}-full.zip"
+  zip = File.join(options[:cache], "umls-#{version}-full.zip")
+  mrconso = File.join(options[:cache], member)
+
+  if File.exist?(mrconso)
+    warn "Using already-extracted #{mrconso}"
+  else
+    unless File.exist?(zip)
+      warn "Downloading UMLS #{version} full release (several GB)..."
+      # NLM publishes no `current` alias, so the version is pinned by hand per release.
+      download("https://uts-ws.nlm.nih.gov/download?url=#{release}&apiKey=#{key}", zip)
+    end
+
+    warn "Extracting #{member}..."
+    system("unzip", "-o", "-q", zip, member, "-d", options[:cache]) or
+      abort "unzip failed. If the release layout differs, extract MRCONSO.RRF yourself and " \
+            "pass --mrconso."
+  end
+end
+
+abort "MRCONSO not found: #{mrconso}" unless File.exist?(mrconso)
+
+# --- parse, join, write -----------------------------------------------------------
+
+warn "Reading #{mrconso}..."
+result = Validation::ChvSource.parse(mrconso, progress: lambda { |lines|
+  warn format("\r  %d million lines", lines / 1_000_000) if (lines % 1_000_000).zero?
+})
+warn ""
+
+Validation::ChvSource.write(result, options[:output])
+
+warn "  CHV atoms #{result.chv_atoms}, RxNorm concepts #{result.rxnorm_concepts}"
+warn "  no RxNorm atom for the concept: #{result.unmatched} (conditions, symptoms, procedures)"
+warn "  identical to the RxNorm name:   #{result.identical}"
+warn "Wrote #{result.pairs.size} pairs to #{options[:output]}"

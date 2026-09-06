@@ -12,3 +12,10 @@
   cache hit.
 - Per-pack `edit_distance` / `frequency_threshold` defaults carried in the registry.
 - `SpellKit::Dictionaries.clear_cache!`, `.pack_names`, `.pack`, `.cache_dir`.
+- Validation tooling (`validation/`, `bin/fetch_chv`, `bin/validate`) that tunes a pack's
+  `edit_distance` / `frequency_threshold` against a held-out corpus of real misspellings,
+  sweeping the grid and maximizing recall subject to an error-rate ceiling. Excluded from
+  the packaged gem.
+- `bin/fetch_chv` builds that corpus from UMLS MRCONSO with the operator's own
+  `UMLS_API_KEY`, reproducing Substrate's CHV/RxNorm CUI join. The corpus is gitignored:
+  UMLS-licensed content may be used locally but not redistributed.

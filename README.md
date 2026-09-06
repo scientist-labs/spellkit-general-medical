@@ -118,6 +118,58 @@ you switch from a hand-copied URL to a pack name.
 | `Dictionaries::DownloadError` | The artifact could not be fetched |
 | `Dictionaries::ChecksumError` | A downloaded artifact did not match its registered `sha256` |
 
+## Validation
+
+`edit_distance` and `frequency_threshold` are not guesses — they are measured against a
+held-out corpus of real misspellings and then published with the pack.
+
+```bash
+export UMLS_API_KEY=...
+bin/fetch_chv                                          # build the corpus (one-time, several GB)
+bin/validate --dictionary build/dictionary.tsv         # sweep the grid, get the two numbers
+```
+
+`bin/validate` scores every `(edit_distance, frequency_threshold)` pair and recommends the
+one with the best recall whose error rate clears `--max-error-rate` (default 2%). Recall is
+maximized *subject to* harm, never traded against it: in a search box a confident wrong
+correction is worse than no correction.
+
+Every corpus pair lands in exactly one bucket:
+
+| Bucket | Meaning |
+|---|---|
+| `hit` | Corrected to the expected term |
+| `wrong` | Corrected to a **different** term — the harmful case |
+| `miss` | Left unchanged, no suggestion offered |
+| `unreachable` | The correct term isn't in the dictionary, so no tuning could produce it |
+| `shadowed` | The "misspelling" is itself a real term — correctly left alone |
+
+`recall` and `error_rate` are both over `hit + wrong + miss`, so they stay comparable across
+configs while dictionary coverage remains a separate number. The report also prints the share
+of pairs sitting further than edit distance 2 from their target — the hard ceiling on recall
+for *any* edit-distance corrector, and the number that decides whether a phonetic fallback in
+spellkit's Rust core is worth proposing.
+
+### The corpus is never committed
+
+The corpus is built from NLM's Consumer Health Vocabulary: real misspellings people typed,
+mapped to the concept they meant. CHV ships only inside the gated UMLS Metathesaurus release,
+so a licence holder may **use** it here, but redistributing it — which committing it to a
+public repo would do — is not permitted. `corpus/` is gitignored, and `bin/fetch_chv`
+rebuilds it from your own UMLS key.
+
+What leaves that directory is two numbers plus aggregate accuracy figures. Those are
+measurements derived from the corpus, not the corpus itself. Row-level misspelling/term pairs
+are never published, since that would reconstruct CHV.
+
+To reproduce a pack's tuning you need your own [UMLS licence](https://uts.nlm.nih.gov/uts/signup-login).
+See [corpus/README.md](corpus/README.md). The harness reads any two-column
+`misspelling<TAB>correct term` TSV, so you can point `--corpus` at your own instead.
+
+**Scope caveat**: CHV's drug coverage is what the join reaches, so constants tuned this way
+are measured on *drug* misspellings and then applied to a pack that also holds conditions and
+gene symbols. Release notes should say so rather than implying the whole pack was validated.
+
 ## Licensing
 
 The MIT license in this repository covers the **code**. Pack artifacts are published as
@@ -126,8 +178,8 @@ requirements; each release documents them.
 
 One constraint is worth stating up front because it shapes the medical pack: NLM's Consumer
 Health Vocabulary ships only inside the gated UMLS Metathesaurus release, so CHV-derived rows
-are **never published in a pack artifact**. CHV is used only as a held-out validation corpus
-for tuning `edit_distance` and `frequency_threshold`.
+are **never published in a pack artifact**, and the corpus built from it is never committed.
+CHV is used only locally, as a held-out validation corpus — see [Validation](#validation).
 
 ## Development
 
@@ -139,3 +191,8 @@ bundle exec standardrb
 
 The specs run against the real spellkit native extension. If a sibling `../spellkit`
 checkout exists, the Gemfile prefers it over the published gem.
+
+`validation/` and `bin/` are build-time tooling and are deliberately excluded from the
+packaged gem — a consumer installs Ruby pointers, not a pipeline. The validation specs pin
+the harness against small synthetic fixtures (hand-authored typos, no UMLS content), so they
+run on a fresh clone; the specs that need the real corpus skip when it is absent.
