@@ -1,0 +1,56 @@
+name: Release
+
+# Adopts scientist-labs/rust-gem-release@0.11.0 as the org-standard publish workflow for this
+# PURE-RUBY gem, matching thor-interactive and ragnar-cli: the three native build legs are OFF,
+# so only the Rust-free source-gem job runs (gem build + gem push + GitHub Release).
+#
+# THIS SHIPS THE GEM, NOT THE PACKS. The gem is Ruby pointers; a pack is a pair of data files
+# built from Substrate's warehouse, which this public runner has no access to. Pack releases are
+# an operator procedure - see RELEASING.md. The two are versioned independently on purpose
+# (PLAN.md): shipping medical-v3 must not force a consumer of another pack to do anything.
+#
+# Three ways to release, all from this one file:
+#   1. CLI ......... bump version.rb, commit, `git tag X.Y.Z && git push --tags`
+#   2. version box . Actions -> Run workflow -> type a version (+ check publish)
+#   3. dry-run ..... Run workflow with version blank -> builds the gem, no publish
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+.*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to cut + release, e.g. 1.0.0 (blank = build-only dry-run)"
+        type: string
+        default: ""
+      publish:
+        description: "Push to RubyGems (leave false for a dry-run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: scientist-labs/rust-gem-release/.github/workflows/release.yml@0.11.0
+    with:
+      gem-name: spellkit-dictionaries
+      gemspec: spellkit-dictionaries.gemspec
+      # version.rb defines the constant without requiring spellkit itself, so this loads
+      # standalone on a runner where the native gem may not be installed yet.
+      version-command: ruby -r./lib/spellkit/dictionaries/version -e 'print SpellKit::Dictionaries::VERSION'
+      # $VERSION is exported by the reusable workflow; pass it through literally, NOT via ${{ }}.
+      version: ${{ inputs.version }}
+      bump-command: |
+        sed -i 's/^\( *VERSION *= *\).*/\1"'"$VERSION"'"/' lib/spellkit/dictionaries/version.rb
+      build-darwin: false
+      build-x86_64-linux: false
+      build-aarch64-linux: false
+      publish: ${{ github.event_name == 'push' || inputs.publish }}
+    secrets:
+      rubygems-api-key: ${{ secrets.RUBYGEMS_API_KEY }}

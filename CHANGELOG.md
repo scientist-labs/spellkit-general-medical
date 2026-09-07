@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## 1.0.0
 
 ### Added
 - `SpellKit.enable_dictionary(pack_or_options)` and `SpellKit.dictionary_checker`, added by

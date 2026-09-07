@@ -1,0 +1,58 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Emit the data/packs.yml release block for a built pack.
+#
+#   bin/release_pack --pack general_medical --dir build/medical-general --tag general-medical-v1
+#
+# Checksums are COMPUTED from the files that will actually be uploaded, never hand-copied: a
+# registry sha256 that does not match its asset turns every consumer's first fetch into a
+# ChecksumError, and the registry ships inside the gem, so fixing it means a gem release.
+
+require "optparse"
+require "digest"
+require "json"
+
+options = {}
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: bin/release_pack --pack NAME --dir PATH --tag TAG [options]"
+  opts.on("--pack NAME", "Registry pack name (e.g. general_medical)") { options[:pack] = _1 }
+  opts.on("--dir PATH", "Built pack directory") { options[:dir] = _1 }
+  opts.on("--tag TAG", "Release tag (e.g. general-medical-v1)") { options[:tag] = _1 }
+  opts.on("--repo SLUG", "GitHub repo (default scientist-labs/spellkit-dictionaries)") { options[:repo] = _1 }
+  opts.on("--date YYYY-MM-DD", "Release date") { options[:date] = _1 }
+  opts.on("--edit-distance N", Integer, "Tuned edit_distance") { options[:ed] = _1 }
+  opts.on("--frequency-threshold F", Float, "Tuned frequency_threshold") { options[:ft] = _1 }
+  opts.on("-h", "--help") { puts opts; exit }
+end
+parser.parse!
+
+%i[pack dir tag].each { |key| (warn parser; exit 1) unless options[key] }
+repo = options[:repo] || "scientist-labs/spellkit-dictionaries"
+base = "https://github.com/#{repo}/releases/download/#{options[:tag]}"
+
+dictionary = File.join(options[:dir], "dictionary.tsv")
+protected_path = File.join(options[:dir], "protected.txt")
+abort "Not found: #{dictionary}" unless File.exist?(dictionary)
+
+sha = ->(path) { Digest::SHA256.hexdigest(File.binread(path)) }
+term_count = File.foreach(dictionary).count
+
+puts "  #{options[:pack]}:"
+puts "    release:"
+puts "      tag: #{options[:tag]}"
+puts "      released_on: \"#{options[:date]}\"" if options[:date]
+puts "      term_count: #{term_count}"
+puts "      dictionary:"
+puts "        url: #{base}/dictionary.tsv"
+puts "        sha256: \"#{sha.call(dictionary)}\""
+if File.exist?(protected_path)
+  puts "      protected:"
+  puts "        url: #{base}/protected.txt"
+  puts "        sha256: \"#{sha.call(protected_path)}\""
+end
+if options[:ed] || options[:ft]
+  puts "      defaults:"
+  puts "        edit_distance: #{options[:ed]}" if options[:ed]
+  puts "        frequency_threshold: #{options[:ft]}" if options[:ft]
+end

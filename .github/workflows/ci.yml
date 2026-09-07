@@ -1,0 +1,35 @@
+name: build
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ruby
+          bundler-cache: true
+
+      - name: Run specs
+        run: bundle exec rake spec
+
+      - name: Lint
+        run: bundle exec standardrb
+
+      # The pack artifacts cannot be built here (they need warehouse access, see
+      # RELEASING.md), but the registry ships INSIDE the gem, so a malformed or
+      # floating-URL entry would be shipped to every consumer. Parsing it is cheap.
+      - name: Validate the pack registry
+        run: |
+          bundle exec ruby -e '
+            require "spellkit/dictionaries"
+            SpellKit::Dictionaries.packs.each do |name, pack|
+              state = pack.released? ? pack.release.tag : "unreleased"
+              puts format("%-18s %s", name, state)
+            end
+          '
