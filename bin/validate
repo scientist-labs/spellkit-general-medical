@@ -106,6 +106,21 @@ if File.exist?(english_path)
   fp[:examples].first(5).each { |word, got| puts "    #{word} -> #{got}" }
 end
 
+if File.exist?(english_path)
+  baseline = SpellKit::Checker.new.load!(dictionary: english_path, edit_distance: 2, frequency_threshold: 1.0)
+  pack = SpellKit::Checker.new.load!(
+    **{dictionary: options[:dictionary], edit_distance: 2, frequency_threshold: 1.0}
+      .merge(options[:protected] ? {protected_path: options[:protected]} : {})
+  )
+  lift = Validation::BaselineComparison.new(pack: pack, baseline: baseline, corpus: corpus).run
+  puts
+  puts "Lift over a generic English spellchecker (same denominator, all #{lift[:total]} pairs):"
+  puts format("  generic English  %4d corrections", lift[:baseline])
+  puts format("  this pack        %4d corrections", lift[:pack])
+  puts format("  only this pack   %4d  <- what the domain pack buys", lift[:only_pack])
+  puts format("  only English     %4d  (often valid alternate spellings the pack keeps)", lift[:only_baseline])
+end
+
 best = Validation::Sweep.recommend(outcomes, max_error_rate: options[:max_error_rate])
 puts
 if best

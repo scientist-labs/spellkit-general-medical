@@ -87,6 +87,49 @@ module Validation
     end
   end
 
+  # LIFT OVER A GENERIC ENGLISH SPELLCHECKER.
+  #
+  # The question that decides whether a domain pack is worth shipping at all, and it is not
+  # answered by the pack's own recall: an 80k English frequency list already contains
+  # acetaminophen, diabetes, metformin, psoriasis and ibuprofen, so a hand-picked regression
+  # list of those flatters the pack badly. The pack earns its place on brand names and newer
+  # or specialist drugs - flexeril, semaglutide, pembrolizumab - which no general word list
+  # carries.
+  #
+  # Both sides are scored over the SAME denominator (every pair), so a baseline that simply
+  # cannot reach a target counts that as a miss rather than quietly shrinking its own
+  # denominator and inflating its rate.
+  class BaselineComparison
+    def initialize(pack:, baseline:, corpus:)
+      @pack = pack
+      @baseline = baseline
+      @corpus = corpus
+    end
+
+    def run
+      pack_hits = {}
+      baseline_hits = {}
+
+      @corpus.each do |pair|
+        pack_hits[pair.misspelling] = @pack.correct(pair.misspelling).to_s.downcase == pair.expected
+        baseline_hits[pair.misspelling] = @baseline.correct(pair.misspelling).to_s.downcase == pair.expected
+      end
+
+      only_pack = @corpus.pairs.select { |p| pack_hits[p.misspelling] && !baseline_hits[p.misspelling] }
+      only_baseline = @corpus.pairs.select { |p| baseline_hits[p.misspelling] && !pack_hits[p.misspelling] }
+
+      {total: @corpus.size,
+       pack: pack_hits.values.count(true),
+       baseline: baseline_hits.values.count(true),
+       only_pack: only_pack.size,
+       only_baseline: only_baseline.size,
+       # Often not true regressions: these are frequently valid alternate spellings
+       # (aluminium, frusemide, glycerine) that the pack legitimately contains and therefore
+       # leaves alone, where the corpus asserts a single canonical target.
+       only_baseline_examples: only_baseline.first(8).map { |p| [p.misspelling, p.expected] }}
+    end
+  end
+
   class Report
     attr_reader :buckets, :distances, :wrong_examples, :total
 

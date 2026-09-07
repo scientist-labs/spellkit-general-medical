@@ -399,6 +399,32 @@ on common English on every run, and a spec reproduces the failure in miniature. 
 number from a misspelling corpus is not evidence that a pack is safe.** `general_medical` is
 the default anyone should reach for; `medical` is for callers who filter tokens themselves.
 
+**Lift over a generic English spellchecker**, the number that decides whether the pack is worth
+shipping at all. Both scored over the same denominator (all 652 pairs), so a baseline that
+cannot reach a target counts it as a miss rather than shrinking its own denominator:
+
+| | corrections | wrong | unchanged |
+|---|---|---|---|
+| generic English (en-80k) | 59 (9.0%) | 104 | 489 |
+| `general_medical` | **451 (69.2%)** | **63** | 138 |
+
+403 pairs are fixed only by the pack; 11 only by English. 7.6x the corrections AND fewer wrong
+answers. The 11 are mostly not regressions: `aluminium`, `frusemide`, `glycerine`, `amfetamine`
+are valid British/INN spellings the pack legitimately CONTAINS and therefore leaves alone,
+where CHV asserts a single canonical target.
+
+**Caveat on the framing**: a corpus of drug misspellings favours a drug dictionary by
+construction, so this measures the lift on domain-shaped input, not on real traffic whose mix
+is unknown. What makes it decisive anyway is the pairing with the false-positive result -
+large gain on domain input, **0.0%** measured harm on ordinary English - so it is upside
+without a measured downside, not a trade.
+
+A hand-picked regression list is a bad instrument here and flattered the pack badly: en-80k
+already contains acetaminophen, diabetes, metformin, psoriasis and ibuprofen, so a generic
+checker scores 5/8 on the typos this project started from. The pack earns its place on brand
+names and newer drugs - flexeril, semaglutide, pembrolizumab - which no general word list
+carries.
+
 **Do not quote 88.6% as a typo-correction rate.** It is a consumer-form-to-canonical-form rate
 over a filtered slice, and the residual "wrong" cases are dominated by genuine ambiguity
 (`bromocryptin` -> bromocriptin when bromocriptine was wanted) and by dictionary variants that
