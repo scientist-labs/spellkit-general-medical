@@ -31,6 +31,8 @@ Gem::Specification.new do |spec|
   ])
   spec.require_paths = ["lib"]
 
+  # 0.3.0 is the first spellkit that installs on Ruby 4.0 without a Rust toolchain, so it
+  # is the floor for anyone on Ruby 4; 0.2.0 still works fine on 3.1-3.4.
   spec.add_dependency "spellkit", ">= 0.2.0", "< 2.0"
 
   spec.add_development_dependency "rake", "~> 13.0"

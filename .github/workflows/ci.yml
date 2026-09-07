@@ -10,13 +10,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # PINNED, not "ruby" (latest). spellkit 0.2.0's precompiled platform gem carries one
-      # binary per Ruby ABI under lib/spellkit/<major.minor>/, and ships 3.1 through 3.4 only.
-      # On Ruby 4.0 RubyGems falls back to the SOURCE gem and tries to compile the Rust
-      # extension, which fails on the runner. Raise this once spellkit publishes a 4.0 leg.
+      # Unpinned again as of spellkit 0.3.0, which ships a Ruby 4.0 binary in its
+      # precompiled platform gem. Before that, `ruby` (latest) resolved to 4.0.x, found no
+      # 4.0 ABI, fell back to the source gem, and failed to compile the Rust extension.
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.4"
+          ruby-version: ruby
           bundler-cache: true
 
       - name: Run specs
