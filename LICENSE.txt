@@ -22,4 +22,4 @@ THE SOFTWARE.
 
 NOTE: this license covers the CODE in this repository. Dictionary pack artifacts
 published as GitHub Release assets carry their own upstream source licenses and
-attribution requirements; see each pack's release notes and README.md.
+attribution requirements; see ATTRIBUTION.md and each pack's release notes.

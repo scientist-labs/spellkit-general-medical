@@ -208,6 +208,18 @@ See [corpus/README.md](corpus/README.md). The harness reads any two-column
 are measured on *drug* misspellings and then applied to a pack that also holds conditions and
 gene symbols. Release notes should say so rather than implying the whole pack was validated.
 
+## Data sources
+
+Pack artifacts are built from RxNorm and MeSH (public domain, NLM), Open Targets/Ensembl gene
+symbols (CC0), and — for `general_medical` only — SymSpell's `en-80k` English frequency list
+(MIT; derived from Google Books Ngram data, CC BY 3.0).
+
+`general_medical` **embeds** that English list, whereas spellkit only points at its URL and lets
+each consumer fetch it. Merging it into a published artifact is redistribution rather than a
+pointer, which is permitted but carries an attribution obligation. See
+**[ATTRIBUTION.md](ATTRIBUTION.md)** for the full table, the NLM disclaimer, and what is
+deliberately excluded.
+
 ## Licensing
 
 The MIT license in this repository covers the **code**. Pack artifacts are published as
