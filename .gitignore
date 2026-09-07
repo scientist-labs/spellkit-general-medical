@@ -1,6 +1,7 @@
 /.bundle/
 /pkg/
 /tmp/
+/build/
 /coverage/
 Gemfile.lock
 *.gem

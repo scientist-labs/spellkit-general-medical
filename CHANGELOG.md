@@ -16,6 +16,11 @@
   `edit_distance` / `frequency_threshold` against a held-out corpus of real misspellings,
   sweeping the grid and maximizing recall subject to an error-rate ceiling. Excluded from
   the packaged gem.
+- `bin/build_pack` + `pipeline/`: reshapes Substrate's dictionary-source export into
+  spellkit's `dictionary.tsv` / `protected.txt` contract. Decomposes multi-word rows (SymSpell
+  is a unigram index), spreads a phrase's prominence across its parts, filters English glue via
+  spellkit's own frequency list, and requires a fragment to appear in 2+ phrases so source
+  typos do not earn dictionary entries. Excluded from the packaged gem.
 - `bin/fetch_chv` builds that corpus from UMLS MRCONSO with the operator's own
   `UMLS_API_KEY`, reproducing Substrate's CHV/RxNorm CUI join. The corpus is gitignored:
   UMLS-licensed content may be used locally but not redistributed.

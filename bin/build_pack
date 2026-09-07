@@ -1,0 +1,59 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Build a pack's dictionary.tsv + protected.txt from Substrate's dictionary-source export.
+#
+#   bin/build_pack --source dict_source.tsv --out build/medical
+#
+# The export is produced by substrate's bin/export_dictionary_source.rb and carries raw
+# prominence; all SymSpell shaping (frequency floor, phrase decomposition, glue filtering)
+# happens HERE, where the validation corpus lives and the numbers can be measured.
+
+$stdout.sync = true
+
+require "optparse"
+require_relative "../pipeline/pack_builder"
+require_relative "../pipeline/english_stopwords"
+
+options = {out: "build/medical", floor: 1, stopwords: 1000, min_fragment_df: 2}
+
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: bin/build_pack --source PATH [options]"
+  opts.on("--source PATH", "Substrate dictionary-source export (required)") { options[:source] = _1 }
+  opts.on("--out PATH", "Output directory (default #{options[:out]})") { options[:out] = _1 }
+  opts.on("--floor N", Integer, "Frequency floor (default #{options[:floor]})") { options[:floor] = _1 }
+  opts.on("--min-fragment-df N", Integer, "Distinct phrases a fragment must appear in " \
+                                          "(default #{options[:min_fragment_df]})") { options[:min_fragment_df] = _1 }
+  opts.on("--stopwords N", Integer, "Top-N English words to exclude from phrase fragments " \
+                                    "(default #{options[:stopwords]}; 0 disables)") { options[:stopwords] = _1 }
+  opts.on("-h", "--help") { puts opts; exit }
+end
+parser.parse!
+
+unless options[:source]
+  warn parser
+  exit 1
+end
+abort "Source not found: #{options[:source]}" unless File.exist?(options[:source])
+
+stopwords = options[:stopwords].positive? ? Pipeline::EnglishStopwords.top(options[:stopwords]) : Set.new
+
+builder = Pipeline::PackBuilder.new(
+  source: options[:source], stopwords: stopwords, floor: options[:floor],
+  min_fragment_df: options[:min_fragment_df]
+).build
+builder.write(options[:out])
+
+stats = builder.stats
+puts "Wrote #{options[:out]}/"
+puts format("  %-22s %d", "source rows", stats[:source_rows])
+puts format("  %-22s %d", "phrases decomposed", stats[:phrases])
+puts format("  %-22s %d", "terms from curated", stats[:from_curated])
+puts format("  %-22s %d", "terms from phrases", stats[:from_phrases])
+puts format("  %-22s %d", "rejected (fragment)", stats[:rejected_fragment])
+puts format("  %-22s %d", "rejected (stopword)", stats[:rejected_stopword])
+puts format("  %-22s %d", "rejected (rare frag)", stats[:rejected_rare_fragment])
+puts format("  %-22s %d", "rejected (curated)", stats[:rejected_curated])
+puts
+puts format("  %-22s %d", "DICTIONARY TERMS", stats[:terms])
+puts format("  %-22s %d", "PROTECTED TERMS", stats[:protected])

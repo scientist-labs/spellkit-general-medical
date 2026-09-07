@@ -25,7 +25,7 @@ SpellKit.correct("CDK10")         # => "CDK10"  (protected, never "corrected")
 
 | Pack | Contents | Latest |
 |---|---|---|
-| `:medical` | Drug, condition, gene and target names. Domain terms only — no general English. | *unreleased* |
+| `:medical` | Drug, condition, gene and target names. Domain terms only — no general English. | *built, unreleased* |
 | `:general_medical` | The medical pack merged onto spellkit's English word list, so one checker understands both. | *unreleased* |
 
 Both packs are registered and named but **not yet published**. Calling
@@ -117,6 +117,37 @@ you switch from a hand-copied URL to a pack name.
 | `Dictionaries::RegistryError` | `data/packs.yml` is missing, unparseable, or a newer schema |
 | `Dictionaries::DownloadError` | The artifact could not be fetched |
 | `Dictionaries::ChecksumError` | A downloaded artifact did not match its registered `sha256` |
+
+## Building a pack
+
+```bash
+# 1. In the substrate repo, export the name surface (read-only, production v10)
+bin/export_dictionary_source.rb --output dict_source.tsv
+
+# 2. Here, reshape it into spellkit's contract
+bin/build_pack --source dict_source.tsv --out build/medical
+```
+
+`bin/build_pack` does the SymSpell shaping the export deliberately leaves alone:
+
+- **Decomposes phrases.** SymSpell is a unigram index, so a multi-word row can never match a
+  typed token — and on the real v10 export 162,605 of 275,936 rows are phrases. This is not
+  merely wasteful: `diabetes` occurs *only* inside phrases, so without decomposition "diabets"
+  corrects to nothing.
+- **Spreads a phrase's prominence across its parts.** Otherwise the MeSH root category
+  "pathological conditions, signs and symptoms" makes `signs` and `symptoms` the two
+  highest-frequency terms in the pack.
+- **Filters English glue** from fragments using spellkit's own frequency list, so `ribosomal`
+  survives decomposition and `small` does not.
+- **Requires a fragment to appear in 2+ distinct phrases.** Substrate's drug names include
+  sponsor-typed trial intervention names, so genuine typos are present in the source. Admitting
+  one disables correction of that typo entirely, because spellkit never corrects a word it can
+  find — `frequency_threshold` governs correction *targets*, not membership. The cost is that
+  legitimately rare words appearing in a single phrase are dropped too; `--min-fragment-df 1`
+  turns the rule off.
+- **Scores `1 + prominence`, not a high floor.** A large floor makes every term look
+  respectable and neuters `frequency_threshold`, which is the lever that keeps a low-signal
+  term from winning a correction.
 
 ## Validation
 

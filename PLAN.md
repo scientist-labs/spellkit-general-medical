@@ -377,8 +377,11 @@ worth building speculatively before the CHV validation pass says it's needed.
    registered with `release: null`, so calling them raises `PackNotReleasedError` pointing at this
    file rather than 404ing. 48 specs, green, run against the real spellkit native extension.
    **spellkit's own repo was not touched, exactly as the 2026-09-06 revision above requires.**
-5. This repo: the v0 BUILD PIPELINE (medical + general-medical artifacts) consuming the step-3
-   export - **not started, and blocked on step 3.** Everything downstream of it is already in
+5. This repo: the v0 BUILD PIPELINE - **medical built and verified 2026-09-06** against a real
+   `substrate-db-production-v10` export (275,936 source terms -> 126,461 dictionary terms,
+   89,953 protected). Corrects 10/10 of the regression typos at `edit_distance: 2`,
+   `frequency_threshold: 10.0`. NOT YET RELEASED: the tuning is a spot-check, not the CHV
+   sweep, and `general_medical` (the English merge) is still unbuilt. Formerly described as: Everything downstream of it is already in
    place: publishing a release and flipping `release: null` to a real tag + sha256 in
    `data/packs.yml` is all that stands between the export existing and `enable_dictionary(:medical)`
    working. Note step 5 was previously described as "the thin `SpellKit::Dictionaries` pointer-registry
@@ -386,6 +389,44 @@ worth building speculatively before the CHV validation pass says it's needed.
 6. Integration ticket (Substrate): explore's search box calls spellkit with the published
    dictionary to correct/expand a query term before it hits ParadeDB - separate scoped work, not
    part of this repo, not started.
+
+### Next up: an IUPAC / systematic-chemical-name pack (Chris, 2026-09-06)
+
+Decided AFTER the medical pack, but ahead of any other domain pack. The question was whether
+`ethyl-methyl-...` style systematic names can be spellchecked at all, catching obvious typos
+without flagging things that are probably right.
+
+**SymSpell over whole IUPAC names is structurally the wrong tool and must not be attempted.**
+IUPAC names are generative, not enumerable - `(2S)-2-[4-(2-methylpropyl)phenyl]propanoic acid`
+is a sentence in a grammar, not a word in a list, and there are unboundedly many valid ones. A
+dictionary corrector can only ever correct what it lists.
+
+The morphemes, however, ARE a small closed set (hundreds to low thousands): multiplying
+prefixes (di/tri/tetra), stems (meth/eth/prop/but/pent/hex), suffixes (-ane/-ene/-ol/-one/
+-oic acid/-yl/-amide), substituents (hydroxy/chloro/amino/nitro/phenyl/benzyl), ring systems
+(benzen/pyridin/imidazol/naphthalen), locants and stereodescriptors. So: tokenize into
+morphemes, then spellcheck the morphemes. Three layers, ordered by precision:
+
+1. **Structural checks - no dictionary, near-zero false positives.** Unbalanced brackets;
+   multiplier/locant disagreement (`2,3,4-dimethyl` has three locants but `di` says two); a
+   locant that cannot exist (`7-methylhexane`); malformed locant punctuation; stereodescriptors
+   outside the legal set. Each of these is essentially always an error, never a variant.
+2. **Morpheme dictionary at edit distance 1, flagging ONLY when a known morpheme is within
+   distance 1.** Unknown-and-far means a rare-but-valid morpheme or a trade name - stay silent.
+   This is already how spellkit behaves (`correct` returns its input when nothing is close), so
+   the precision-first requirement and the engine's default agree.
+3. **OPSIN round-trip** (Open Parser for Systematic IUPAC Nomenclature) - highest precision by
+   a wide margin; a name it cannot parse is a strong wrongness signal. Java, so realistically a
+   build-time/CI validator rather than something in-process in a Ruby app. Its accuracy is
+   believed high on well-formed names but is UNVERIFIED here - check before relying on it.
+
+Recommendation: layers 1 and 2, shipped as a `chemistry` pack whose dictionary is morphemes
+rather than names. **The real gap is a morpheme tokenizer, which spellkit does not have** - it
+splits on whitespace, and `2-methylpropyl` is one whitespace token. That tokenizer belongs in
+this gem, not in spellkit's Rust core. Deliberately NOT added to `data/packs.yml` yet: the
+registry's `release: null` means "specified but unpublished", and this is not specified yet.
+
+## Sequencing relative to Substrate work
 
 **For an agent picking this up cold**: steps 1, 2 and 4 are done. **Step 3 (the Substrate export
 script) is the actual next task and has no code yet** - start there, in the `substrate` repo, not
