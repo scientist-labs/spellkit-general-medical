@@ -17,7 +17,8 @@ require_relative "../validation/sweep"
 
 options = {
   corpus: Validation::Corpus::DEFAULT_PATH,
-  max_error_rate: 0.02
+  max_error_rate: 0.02,
+  single_token: true
 }
 
 parser = OptionParser.new do |opts|
@@ -25,6 +26,10 @@ parser = OptionParser.new do |opts|
   opts.on("--dictionary PATH", "Dictionary TSV to score (required)") { options[:dictionary] = _1 }
   opts.on("--protected PATH", "Protected-terms file to load alongside it") { options[:protected] = _1 }
   opts.on("--corpus PATH", "Corpus TSV (default: #{Validation::Corpus::DEFAULT_PATH})") { options[:corpus] = _1 }
+  opts.on("--[no-]single-token", "Score only single-token pairs (default true; a unigram " \
+                                 "index cannot express a multi-word mapping)") { options[:single_token] = _1 }
+  opts.on("--max-pair-distance N", Integer, "Score only pairs within N edits (CHV contains " \
+                                            "abbreviations no edit-distance corrector can reach)") { options[:max_pair_distance] = _1 }
   opts.on("--max-error-rate F", Float, "Harm ceiling for the recommendation (default 0.02)") do
     options[:max_error_rate] = _1
   end
@@ -42,7 +47,8 @@ unless File.exist?(options[:dictionary])
 end
 
 corpus = begin
-  Validation::Corpus.load(options[:corpus])
+  Validation::Corpus.load(options[:corpus], single_token_only: options[:single_token],
+    max_distance: options[:max_pair_distance])
 rescue Validation::Corpus::MissingError => e
   abort e.message
 end

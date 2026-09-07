@@ -43,6 +43,30 @@ RSpec.describe "validation harness" do
       end
     end
 
+    it "can drop multi-word pairs, which a unigram index cannot express" do
+      Tempfile.create(["corpus", ".tsv"]) do |file|
+        file.write("asprin\taspirin\n0.45% sodium chloride\tsodium chloride 0.0769 meq/ml\n")
+        file.flush
+
+        expect(described_class.load(file.path, single_token_only: true).size).to eq(1)
+      end
+    end
+
+    it "can drop pairs no edit-distance corrector could reach" do
+      # CHV maps consumer terms to concepts by MEANING, so it carries abbreviations like
+      # adr -> doxorubicin. Scoring those punishes the checker for a task it is not
+      # attempting, and drags the recommended threshold up to a setting that corrects nothing.
+      Tempfile.create(["corpus", ".tsv"]) do |file|
+        file.write("asprin\taspirin\nadr\tdoxorubicin\n")
+        file.flush
+
+        loaded = described_class.load(file.path, max_distance: 2)
+
+        expect(loaded.size).to eq(1)
+        expect(loaded.pairs.first.misspelling).to eq("asprin")
+      end
+    end
+
     it "explains the licence when the corpus is absent rather than failing obscurely" do
       expect { described_class.load("/nonexistent/corpus.tsv") }
         .to raise_error(described_class::MissingError, /not committed on purpose.*bin\/fetch_chv/m)

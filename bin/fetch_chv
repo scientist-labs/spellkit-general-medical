@@ -26,7 +26,10 @@ require "uri"
 require_relative "../validation/chv_source"
 
 options = {
-  version: "2025AB",
+  # NLM publishes no `current` alias, so this is a hand-bumped pin (twice a year, AA/AB).
+  # Verified live 2026-09-06: 2026AA resolves. Substrate hit the stale-default trap on its own
+  # CHV connector (substrate#2806) - if a pull 404s, bump this before debugging anything else.
+  version: "2026AA",
   output: File.expand_path("../corpus/chv_drug_misspellings.tsv", __dir__),
   cache: File.expand_path("../tmp/umls", __dir__)
 }

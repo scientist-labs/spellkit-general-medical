@@ -12,8 +12,11 @@
 $stdout.sync = true
 
 require "optparse"
+require "json"
+require "fileutils"
 require_relative "../pipeline/pack_builder"
 require_relative "../pipeline/english_stopwords"
+require_relative "../pipeline/english_merge"
 
 options = {out: "build/medical", floor: 1, stopwords: 1000, min_fragment_df: 2}
 
@@ -26,6 +29,7 @@ parser = OptionParser.new do |opts|
                                           "(default #{options[:min_fragment_df]})") { options[:min_fragment_df] = _1 }
   opts.on("--stopwords N", Integer, "Top-N English words to exclude from phrase fragments " \
                                     "(default #{options[:stopwords]}; 0 disables)") { options[:stopwords] = _1 }
+  opts.on("--merge-english", "Also emit the general_medical variant (domain + English)") { options[:merge] = true }
   opts.on("-h", "--help") { puts opts; exit }
 end
 parser.parse!
@@ -57,3 +61,22 @@ puts format("  %-22s %d", "rejected (curated)", stats[:rejected_curated])
 puts
 puts format("  %-22s %d", "DICTIONARY TERMS", stats[:terms])
 puts format("  %-22s %d", "PROTECTED TERMS", stats[:protected])
+
+if options[:merge]
+  merge = Pipeline::EnglishMerge.new
+  merged = merge.merge(builder.dictionary)
+  target = "#{options[:out].chomp("/")}-general"
+
+  FileUtils.mkdir_p(target)
+  File.open(File.join(target, "dictionary.tsv"), "w") do |out|
+    merged.each { |term, frequency| out.puts "#{term}\t#{frequency}" }
+  end
+  # The protected list is unchanged by the merge: a gene symbol must not be corrected
+  # whether or not English words share the index.
+  FileUtils.cp(File.join(options[:out], "protected.txt"), File.join(target, "protected.txt"))
+  File.write(File.join(target, "manifest.json"), JSON.pretty_generate(merge.stats.sort.to_h))
+
+  puts
+  puts "Wrote #{target}/ (general_medical)"
+  merge.stats.each { |key, value| puts format("  %-22s %s", key, value) }
+end

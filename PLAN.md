@@ -337,7 +337,49 @@ spellkit does all the actual loading, indexing and hot-reload work exactly as it
 This does not change the "spellkit's core stays pack-free" decision - the fetcher lives in this
 gem, not in spellkit.
 
-## Validation
+## Validation: measured 2026-09-06 (first real CHV run)
+
+Ran against UMLS 2026AA + the v10 medical pack. Numbers, then the caveats that bound them.
+
+**The UMLS full release is not a directory of RRF files**, and the member path Substrate's CHV
+connector guesses (`{version}/META/MRCONSO.RRF`) does not exist in it. The real layout is
+`2026AA-full/2026aa-{1,2}-meta.nlm` (each a zip) plus `mmsys.zip` (MetamorphoSys), with
+MRCONSO living inside the first as three independently-gzipped, line-safe parts
+(`2026AA/META/MRCONSO.RRF.{aa,ab,ac}.gz`, 18,064,970 lines reassembled, 0 malformed). Also
+`2025AB` is stale; `2026AA` is current. **Both are latent bugs in substrate's own connector**
+and worth folding into substrate#2806.
+
+**CHV is not a misspelling list.** This is the finding that most changes how the corpus may be
+used. Of 5,195 drug pairs, only 1,325 are single-token -> single-token; the rest are word-order
+permutations ("0 9 chloride injection sodium") and formulation restatements ("0.45% sodium
+chloride" -> "sodium chloride 0.0769 meq/ml"). And even the single-token remainder maps by
+MEANING, not spelling: it contains abbreviations (`adr` -> doxorubicin, `na` -> sodium, `cyts`
+-> cyclophosphamide) that no edit-distance corrector can ever reach, plus morphological
+variants (`accutanes` -> accutane, `5-fluorouracil` -> fluorouracil) alongside true typos
+(`acetobutolol` -> acebutolol). Scoring the unreachable ones as errors dragged the recommended
+`frequency_threshold` to 1000, i.e. a checker that corrects nothing. `bin/validate` therefore
+filters to single-token pairs within edit distance 2 by default.
+
+**Results** on the 652 orthographically-reachable pairs (360 scorable against this dictionary):
+
+| edit_distance | frequency_threshold | recall | error rate |
+|---|---|---|---|
+| 1 | 1 | 71.9% | 7.8% |
+| 1 | 100 | 14.2% | 2.5% |
+| **2** | **1** | **88.6%** | **11.4%** |
+| 2 | 10 | 58.3% | 14.4% |
+
+Provisional pack default: **`edit_distance: 2`, `frequency_threshold: 1.0`**. The 2% harm
+ceiling this repo ships as `--max-error-rate`'s default is miscalibrated for this corpus -
+nothing useful clears it - so the number above was chosen at a 12% ceiling and is a JUDGEMENT,
+not something the sweep settled on its own.
+
+**Do not quote 88.6% as a typo-correction rate.** It is a consumer-form-to-canonical-form rate
+over a filtered slice, and the residual "wrong" cases are dominated by genuine ambiguity
+(`bromocryptin` -> bromocriptin when bromocriptine was wanted) and by dictionary variants that
+should not be there (`5fluorouracil`). Dictionary coverage, not tuning, is the bigger lever
+left: 179 of 652 targets are absent from the pack entirely, and 113 misspellings are themselves
+dictionary terms.
 
 Before calling a release good:
 - Round-trip check: every term in the input source list must itself be `correct?` after loading
