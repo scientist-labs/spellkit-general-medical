@@ -57,6 +57,7 @@ puts format("  %-22s %d", "terms from phrases", stats[:from_phrases])
 puts format("  %-22s %d", "rejected (fragment)", stats[:rejected_fragment])
 puts format("  %-22s %d", "rejected (stopword)", stats[:rejected_stopword])
 puts format("  %-22s %d", "rejected (rare frag)", stats[:rejected_rare_fragment])
+puts format("  %-22s %d", "dropped (near-curated)", stats[:dropped_suspected_typo])
 puts format("  %-22s %d", "rejected (curated)", stats[:rejected_curated])
 puts
 puts format("  %-22s %d", "DICTIONARY TERMS", stats[:terms])

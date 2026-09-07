@@ -97,6 +97,42 @@ RSpec.describe Pipeline::PackBuilder do
     end
   end
 
+  describe "provenance" do
+    it "drops an uncurated term one edit from a curated one, as a suspected typo" do
+      # Down-weighting cannot fix this case: spellkit never corrects a word it can FIND, so a
+      # typo in the index blocks correction of itself no matter how low its frequency.
+      expect(terms).to have_key("bromocriptine")
+      expect(terms).not_to have_key("bromocriptin")
+      expect(builder.stats[:dropped_suspected_typo]).to eq(1)
+    end
+
+    it "keeps an uncurated term that is near nothing curated, since novelty is not error" do
+      expect(terms).to have_key("novelcompound")
+    end
+
+    it "down-weights an uncurated term rather than dropping it outright" do
+      # 23,457 of 37,393 single-token drug terms are uncurated; excluding them wholesale would
+      # cost more coverage than the typos are worth.
+      expect(terms["novelcompound"]).to be < terms["flexeril"]
+    end
+  end
+
+  describe "reading the export" do
+    it "refuses a headerless file instead of silently writing an empty dictionary" do
+      Tempfile.create(["src", ".tsv"]) do |file|
+        file.write("flexeril\t17\t0\t\tdrug\t1\trxnorm_ingredient\t1\t1\n")
+        file.flush
+
+        expect { described_class.new(source: file.path).build }
+          .to raise_error(ArgumentError, /no header row/)
+      end
+    end
+
+    it "reads by header name, so a new export column cannot shift the parse" do
+      expect(terms).to have_key("flexeril") # n_tokens moved from index 6 to 8
+    end
+  end
+
   describe "output" do
     it "writes dictionary.tsv frequency-descending, per SymSpell convention" do
       Dir.mktmpdir do |dir|
