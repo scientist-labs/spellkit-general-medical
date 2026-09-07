@@ -16,6 +16,9 @@
   `edit_distance` / `frequency_threshold` against a held-out corpus of real misspellings,
   sweeping the grid and maximizing recall subject to an error-rate ceiling. Excluded from
   the packaged gem.
+- False-positive measurement in `bin/validate`: the share of correctly-spelled common English
+  a pack rewrites. Added after the medical pack was found rewriting 87.5% of the top 1,000
+  English words while scoring 89% recall — a corpus of known misspellings cannot surface that.
 - `bin/build_pack` + `pipeline/`: reshapes Substrate's dictionary-source export into
   spellkit's `dictionary.tsv` / `protected.txt` contract. Decomposes multi-word rows (SymSpell
   is a unigram index), spreads a phrase's prominence across its parts, filters English glue via

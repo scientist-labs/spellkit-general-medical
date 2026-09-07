@@ -22,9 +22,12 @@ schema_version: 1
 packs:
   medical:
     summary: >-
-      Drug, condition, gene and target names for biomedical text. Domain terms only -
-      contains no general English, so pair it with your own English checker instance or
-      use the general_medical pack instead.
+      Drug, condition, gene and target names. Domain terms only. USE general_medical
+      UNLESS every token you pass is already known to be a domain term: measured on the
+      v10 build, this pack rewrites 87.5% of the thousand commonest English words
+      ("the" -> "dhe", "with" -> "witch"), because a dictionary with no English in it
+      treats every ordinary word as an unknown to be fixed. That is inherent to a
+      domain-only dictionary, not a defect in this build.
     built_from:
       - RxNorm (ingredient, brand and synonym names)
       - FDA UNII / GSRS (substance names, incl. ex-US and investigational)

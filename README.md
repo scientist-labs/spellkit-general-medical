@@ -15,7 +15,7 @@ gem "spellkit-dictionaries"
 
 ```ruby
 # config/initializers/spellkit.rb
-SpellKit.enable_dictionary(:medical)
+SpellKit.enable_dictionary(:general_medical)   # <- the one you almost certainly want
 
 SpellKit.correct("acetaminphen")  # => "acetaminophen"
 SpellKit.correct("CDK10")         # => "CDK10"  (protected, never "corrected")
@@ -25,8 +25,15 @@ SpellKit.correct("CDK10")         # => "CDK10"  (protected, never "corrected")
 
 | Pack | Contents | Latest |
 |---|---|---|
-| `:medical` | Drug, condition, gene and target names. Domain terms only — no general English. | *built, unreleased* |
-| `:general_medical` | The medical pack merged onto spellkit's English word list, so one checker understands both. | *unreleased* |
+| `:general_medical` | Medical terms **plus** general English. **Start here.** | *built, unreleased* |
+| `:medical` | Domain terms only. Safe only if every token you pass is already known to be a domain term — see below. | *built, unreleased* |
+
+> **`:medical` alone will corrupt ordinary text.** Measured on the v10 build, it rewrites
+> **87.5%** of the thousand commonest English words — `the` → `dhe`, `and` → `aid`,
+> `with` → `witch` — because a dictionary containing no English treats every ordinary word as
+> an unknown to be corrected. That is inherent to any domain-only dictionary, not a defect in
+> this build. `:general_medical` scores **0.0%** on the same probe while fixing more drug
+> typos. Reach for `:medical` only when you are filtering tokens yourself.
 
 Both packs are registered and named but **not yet published**. Calling
 `SpellKit.enable_dictionary(:medical)` today raises `PackNotReleasedError` with a pointer

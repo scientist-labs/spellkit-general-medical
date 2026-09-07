@@ -166,6 +166,46 @@ RSpec.describe "validation harness" do
     end
   end
 
+  describe Validation::FalsePositiveCheck do
+    # A dictionary with NO general English in it, whose entries happen to sit one edit from
+    # common words. These are the exact substitutions the real medical pack made: and -> aid,
+    # not -> hot, that -> teat, with -> witch, are -> pre. The fixture reproduces the failure
+    # in miniature rather than restating it in a comment.
+    let(:domain_only) do
+      file = Tempfile.new(["domain", ".tsv"])
+      file.write(%w[aid hot teat witch pre].map { |t| "#{t}\t5000" }.join("\n"))
+      file.flush
+      file
+    end
+
+    after { domain_only.close! }
+
+    let(:checker) do
+      SpellKit::Checker.new.load!(dictionary: domain_only.path, edit_distance: 2, frequency_threshold: 1.0)
+    end
+
+    it "catches a domain-only pack rewriting correctly-spelled English" do
+      # The regression this exists for: the medical pack scored 89% recall while rewriting
+      # 87.5% of the thousand commonest English words. A corpus of known misspellings can
+      # never surface that, because every input in it is already wrong.
+      result = described_class.new(checker: checker, words: %w[and not that with are]).run
+
+      expect(result[:rate]).to be > 0.5
+      expect(result[:examples]).not_to be_empty
+    end
+
+    it "reports zero when every probe word is in the dictionary" do
+      result = described_class.new(checker: checker, words: %w[aid hot teat]).run
+
+      expect(result[:mangled]).to eq(0)
+      expect(result[:rate]).to eq(0.0)
+    end
+
+    it "ignores tokens too short to be corrected meaningfully" do
+      expect(described_class.new(checker: checker, words: %w[a an]).run[:considered]).to eq(0)
+    end
+  end
+
   describe Validation::Sweep do
     subject(:sweep) do
       described_class.new(dictionary: dictionary, corpus: corpus,

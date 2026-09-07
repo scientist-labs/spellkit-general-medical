@@ -385,6 +385,20 @@ ceiling this repo ships as `--max-error-rate`'s default is miscalibrated for thi
 nothing useful clears it - so the number above was chosen at a 12% ceiling and is a JUDGEMENT,
 not something the sweep settled on its own.
 
+**THE MEDICAL PACK ALONE IS NOT SAFE FOR GENERAL TEXT, and the harness hid this for three
+rounds.** Measured on the v10 build at the recommended tuning, `medical` rewrites **87.5% of
+the thousand commonest English words** - "the" -> "dhe", "and" -> "aid", "with" -> "witch" -
+while `general_medical` scores **0.0%** on the same probe and fixes MORE drug typos (5/5 vs
+4/5). This is inherent to any domain-only dictionary: with no English in the index, every
+ordinary word is an unknown to be corrected.
+
+It went unseen because every pair in the corpus is a known misspelling, so the harness only
+ever asked "is this typo fixed?" and never "is correct text left alone?" - and the second
+question covers the majority of real input. `bin/validate` now reports the false-positive rate
+on common English on every run, and a spec reproduces the failure in miniature. **A recall
+number from a misspelling corpus is not evidence that a pack is safe.** `general_medical` is
+the default anyone should reach for; `medical` is for callers who filter tokens themselves.
+
 **Do not quote 88.6% as a typo-correction rate.** It is a consumer-form-to-canonical-form rate
 over a filtered slice, and the residual "wrong" cases are dominated by genuine ambiguity
 (`bromocryptin` -> bromocriptin when bromocriptine was wanted) and by dictionary variants that

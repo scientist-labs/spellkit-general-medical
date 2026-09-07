@@ -61,6 +61,32 @@ module Validation
     end
   end
 
+  # FALSE POSITIVES ON CORRECTLY-SPELLED INPUT.
+  #
+  # This exists because its absence hid a catastrophic defect for three rounds of measurement.
+  # Every corpus pair is a known misspelling, so a harness built only on the corpus measures
+  # recall and never asks the opposite question: what does this pack do to text that was
+  # already right? The medical pack scored 89% recall while silently rewriting 87.5% of the
+  # thousand most common English words - "the" -> "dhe", "and" -> "aid", "with" -> "witch" -
+  # because a domain-only dictionary treats every ordinary word as an unknown to be fixed.
+  #
+  # Any pack intended for text that is not pre-filtered to domain terms must score ~0 here.
+  class FalsePositiveCheck
+    def initialize(checker:, words:)
+      @checker = checker
+      @words = words
+    end
+
+    def run
+      considered = @words.select { |word| word.length >= 3 }
+      mangled = considered.reject { |word| @checker.correct(word) == word }
+
+      {considered: considered.size, mangled: mangled.size,
+       rate: considered.empty? ? 0.0 : mangled.size.to_f / considered.size,
+       examples: mangled.first(10).map { |word| [word, @checker.correct(word)] }}
+    end
+  end
+
   class Report
     attr_reader :buckets, :distances, :wrong_examples, :total
 

@@ -14,6 +14,7 @@ $stdout.sync = true
 require "optparse"
 require_relative "../validation/corpus"
 require_relative "../validation/sweep"
+require_relative "../validation/harness"
 
 options = {
   corpus: Validation::Corpus::DEFAULT_PATH,
@@ -86,6 +87,24 @@ puts format("  beyond edit distance 2  %s of scorable pairs - the hard ceiling o
   pct.call(first.beyond_edit_distance_2))
 puts "                          edit-distance corrector; if this is large, a phonetic fallback"
 puts "                          in spellkit's Rust core is worth proposing (PLAN.md)."
+
+# The question the corpus cannot ask: what does this pack do to text that was already right?
+english_path = File.expand_path("../tmp/en-80k.txt", __dir__)
+if File.exist?(english_path)
+  common = File.readlines(english_path).first(1000).map { _1.split(/\s+/).first }.compact
+  probe = Validation::Sweep.new(dictionary: options[:dictionary], protected_path: options[:protected],
+    corpus: corpus, edit_distances: [2], thresholds: [1.0])
+  checker = SpellKit::Checker.new.load!(
+    **{dictionary: options[:dictionary], edit_distance: 2, frequency_threshold: 1.0}
+      .merge(options[:protected] ? {protected_path: options[:protected]} : {})
+  )
+  fp = Validation::FalsePositiveCheck.new(checker: checker, words: common).run
+  puts
+  puts "Correctly-spelled common English (the majority of real input):"
+  puts format("  mangled %s of the top %d words  %s", pct.call(fp[:rate]).strip, fp[:considered],
+    (fp[:rate] > 0.01) ? "<-- NOT SAFE for general text; use the merged pack" : "(safe)")
+  fp[:examples].first(5).each { |word, got| puts "    #{word} -> #{got}" }
+end
 
 best = Validation::Sweep.recommend(outcomes, max_error_rate: options[:max_error_rate])
 puts
