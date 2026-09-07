@@ -54,7 +54,19 @@ packs:
       Frequencies from the two sources are on different scales. The merge floors medical
       terms so they stay reachable without outranking common English words; the exact
       floor is tuned against the CHV held-out corpus and pinned per release.
-    release: null
+    release:
+      tag: general-medical-v1
+      released_on: "2026-09-07"
+      term_count: 206496
+      dictionary:
+        url: https://github.com/scientist-labs/spellkit-dictionaries/releases/download/general-medical-v1/dictionary.tsv
+        sha256: "8e3c8f47d154b90c823bd7bd16d85a8db625fbf042c4ecf7a847e82dffdcff4b"
+      protected:
+        url: https://github.com/scientist-labs/spellkit-dictionaries/releases/download/general-medical-v1/protected.txt
+        sha256: "526bfb9cc1bd20f2028871aa57e150c631375cd2904122d482b7b54193c8d554"
+      defaults:
+        edit_distance: 2
+        frequency_threshold: 1.0
 
 # Shape of a published release, for reference when the first pack ships:
 #
