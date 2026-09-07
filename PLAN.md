@@ -360,7 +360,18 @@ variants (`accutanes` -> accutane, `5-fluorouracil` -> fluorouracil) alongside t
 `frequency_threshold` to 1000, i.e. a checker that corrects nothing. `bin/validate` therefore
 filters to single-token pairs within edit distance 2 by default.
 
-**Results** on the 652 orthographically-reachable pairs (360 scorable against this dictionary):
+**Coverage fix (2026-09-06, same day).** The first measurement missed 26% of correction
+targets. The cause was not licensing and not a missing ingest: RxNorm is tier `none` and
+Substrate already holds the full graph in `silver.silver_rxnorm` (219,237 rows with TTY). The
+blocker was that the export ran as `explore_ro`, which cannot read `silver` - a least-privilege
+choice stricter than PLAN.md's own data-access section calls for. Reading the curated TTYs
+(IN/PIN/MIN/BN) took targets-not-in-dictionary from 172 to **3**, and scorable pairs from 398
+(61%) to **542 (83%)** - 484 typos corrected against 357, a 36% larger addressable set at flat
+recall. Formulation TTYs (SCD/SBD/GPCK) are excluded: they are multi-word strings a unigram
+index cannot use.
+
+**Results** on the 652 orthographically-reachable pairs (542 scorable after the coverage fix;
+360 in the first pass):
 
 | edit_distance | frequency_threshold | recall | error rate |
 |---|---|---|---|
