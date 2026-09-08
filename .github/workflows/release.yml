@@ -4,10 +4,9 @@ name: Release
 # PURE-RUBY gem, matching thor-interactive and ragnar-cli: the three native build legs are OFF,
 # so only the Rust-free source-gem job runs (gem build + gem push + GitHub Release).
 #
-# THIS SHIPS THE GEM, NOT THE PACKS. The gem is Ruby pointers; a pack is a pair of data files
-# built from Substrate's warehouse, which this public runner has no access to. Pack releases are
-# an operator procedure - see RELEASING.md. The two are versioned independently on purpose
-# (PLAN.md): shipping medical-v3 must not force a consumer of another pack to do anything.
+# The pack DATA is vendored in the repo (data/), so this publishes everything - there is no
+# separate artifact step any more. Rebuilding that data needs Substrate warehouse access and is
+# an operator procedure; see RELEASING.md.
 #
 # Three ways to release, all from this one file:
 #   1. CLI ......... bump version.rb, commit, `git tag X.Y.Z && git push --tags`
@@ -39,15 +38,15 @@ jobs:
   release:
     uses: scientist-labs/rust-gem-release/.github/workflows/release.yml@0.11.0
     with:
-      gem-name: spellkit-dictionaries
-      gemspec: spellkit-dictionaries.gemspec
+      gem-name: spellkit-general-medical
+      gemspec: spellkit-general-medical.gemspec
       # version.rb defines the constant without requiring spellkit itself, so this loads
       # standalone on a runner where the native gem may not be installed yet.
-      version-command: ruby -r./lib/spellkit/dictionaries/version -e 'print SpellKit::Dictionaries::VERSION'
+      version-command: ruby -r./lib/spellkit/general_medical/version -e 'print SpellKit::GeneralMedical::VERSION'
       # $VERSION is exported by the reusable workflow; pass it through literally, NOT via ${{ }}.
       version: ${{ inputs.version }}
       bump-command: |
-        sed -i 's/^\( *VERSION *= *\).*/\1"'"$VERSION"'"/' lib/spellkit/dictionaries/version.rb
+        sed -i 's/^\( *VERSION *= *\).*/\1"'"$VERSION"'"/' lib/spellkit/general_medical/version.rb
       build-darwin: false
       build-x86_64-linux: false
       build-aarch64-linux: false

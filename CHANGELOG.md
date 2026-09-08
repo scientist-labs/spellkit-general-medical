@@ -1,48 +1,27 @@
 # Changelog
 
-## 1.1.0
-
-### Added
-- `lazy: true` on `enable_dictionary` and `dictionary_checker`: registers the pack and
-  defers the fetch, disk read and index build until the first real lookup. Eager stays the
-  default, so this is non-breaking. Added because a Rails initializer runs in every process
-  that boots the app, and loading `general_medical` eagerly (~2.1 GB, ~5.5s) OOM-killed a
-  memory-constrained `db:migrate` init container in production.
-- `SpellKit.load_dictionary!` to force a deferred load — for a web-server boot hook, since
-  lazy moves the cost onto the first request rather than removing it.
-- `SpellKit.dictionary_loaded?`.
-
-### Notes
-- `stats` and `healthcheck` do not trigger a deferred load; they report `deferred: true`.
-  A liveness probe must not materialise the index in the process `lazy` protects.
-- An unknown or unreleased pack still raises at boot under `lazy`, not on first use.
-- README documents the Rails-initializer hazard and the measured cost of `edit_distance`
-  (2.1 GB at 2 vs 484 MB at 1).
-
 ## 1.0.0
 
+First release as a standalone pack gem.
+
 ### Added
-- `SpellKit.enable_dictionary(pack_or_options)` and `SpellKit.dictionary_checker`, added by
-  reopening the `SpellKit` module — spellkit itself is unmodified.
-- Versioned pack registry (`data/packs.yml`) with `:medical` and `:general_medical`
-  registered. Neither has a published release yet; both raise `PackNotReleasedError`.
-- Artifact fetcher with permanent caching under `~/.cache/spellkit-dictionaries`, redirect
-  following, SHA-256 verification, and atomic writes so a failed download can never become a
-  cache hit.
-- Per-pack `edit_distance` / `frequency_threshold` defaults carried in the registry.
-- `SpellKit::Dictionaries.clear_cache!`, `.pack_names`, `.pack`, `.cache_dir`.
-- Validation tooling (`validation/`, `bin/fetch_chv`, `bin/validate`) that tunes a pack's
-  `edit_distance` / `frequency_threshold` against a held-out corpus of real misspellings,
-  sweeping the grid and maximizing recall subject to an error-rate ceiling. Excluded from
-  the packaged gem.
-- False-positive measurement in `bin/validate`: the share of correctly-spelled common English
-  a pack rewrites. Added after the medical pack was found rewriting 87.5% of the top 1,000
-  English words while scoring 89% recall — a corpus of known misspellings cannot surface that.
-- `bin/build_pack` + `pipeline/`: reshapes Substrate's dictionary-source export into
-  spellkit's `dictionary.tsv` / `protected.txt` contract. Decomposes multi-word rows (SymSpell
-  is a unigram index), spreads a phrase's prominence across its parts, filters English glue via
-  spellkit's own frequency list, and requires a fragment to appear in 2+ phrases so source
-  typos do not earn dictionary entries. Excluded from the packaged gem.
-- `bin/fetch_chv` builds that corpus from UMLS MRCONSO with the operator's own
-  `UMLS_API_KEY`, reproducing Substrate's CHV/RxNorm CUI join. The corpus is gitignored:
-  UMLS-licensed content may be used locally but not redistributed.
+- The `general_medical` pack, registering itself with `SpellKit::Packs` on load: 206,496
+  terms and 90,829 protected terms, vendored in the gem (1.26 MB packaged).
+- Tuned defaults (`edit_distance: 2`, `frequency_threshold: 1.0`) shipped WITH the data,
+  measured against a held-out corpus rather than left for each consumer to rediscover.
+
+### Changed from spellkit-dictionaries
+This gem replaces `spellkit-dictionaries`, which has been yanked.
+
+- **The data ships in the gem instead of being fetched over HTTP.** The download bought
+  nothing: the pack registry shipped inside a gem anyway, so a pack release already
+  required a gem release. It cost a network dependency on the boot path, a cache
+  directory, checksum machinery, and two failure modes consumers had to handle.
+- **`enable_dictionary` and lazy loading moved into spellkit 1.0.0**, where they belong -
+  spellkit now provides the pack mechanism and still bundles no dictionaries.
+- **Packs are chosen in the Gemfile**, by naming the gem. Ruby has no feature-flag
+  mechanism (that is Cargo); the gem is the unit of selection, and it buys independent
+  version pinning per pack as a bonus.
+- The domain-only `medical` pack is **not published**. Alone it rewrites 87.5% of the
+  thousand commonest English words, because a dictionary containing no English treats
+  every ordinary word as an unknown to correct.

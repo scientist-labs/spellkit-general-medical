@@ -1,4 +1,23 @@
-# spellkit-dictionaries
+# spellkit-general-medical
+
+> **STATUS, 2026-09-08.** This plan is kept as the design record; the shape it describes
+> has since changed in three ways worth knowing before reading it.
+>
+> 1. **The registry moved into spellkit** (1.0.0). spellkit now ships the pack MECHANISM -
+>    `SpellKit::Packs.register`, `enable_dictionary`, lazy loading - and still bundles no
+>    dictionaries. A pack registers itself; spellkit knows the name of none.
+> 2. **The data ships in this gem, not over HTTP.** The download design bought nothing:
+>    the registry shipped inside a gem anyway, so a pack release already required a gem
+>    release. It cost a network dependency on the boot path, a cache, checksum machinery
+>    and two failure modes. Deleted.
+> 3. **This repo is now one pack, not a multi-pack registry.** It was renamed from
+>    `spellkit-dictionaries`, which is yanked. A second domain would be its own gem and
+>    its own repo, chosen in the Gemfile by name - Ruby has no feature flags, so the gem
+>    IS the unit of selection.
+>
+> The medical findings below - sources, licensing, frequency design, validation - all
+> still hold and are why this file is kept rather than deleted.
+
 
 Plan for a domain-dictionary pipeline that makes [spellkit](https://github.com/scientist-labs/spellkit)
 typo-correction scientifically/medically aware. Written 2026-09-04.

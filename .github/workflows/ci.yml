@@ -24,15 +24,16 @@ jobs:
       - name: Lint
         run: bundle exec standardrb
 
-      # The pack artifacts cannot be built here (they need warehouse access, see
-      # RELEASING.md), but the registry ships INSIDE the gem, so a malformed or
-      # floating-URL entry would be shipped to every consumer. Parsing it is cheap.
-      - name: Validate the pack registry
+      # The pack registers itself on require, and the specs assert the vendored data
+      # matches its declared term counts, so `rspec` already covers packaging integrity.
+      - name: Verify the gem packages its data
         run: |
-          bundle exec ruby -e '
-            require "spellkit/dictionaries"
-            SpellKit::Dictionaries.packs.each do |name, pack|
-              state = pack.released? ? pack.release.tag : "unreleased"
-              puts format("%-18s %s", name, state)
+          gem build spellkit-general-medical.gemspec
+          ruby -e '
+            require "rubygems/package"
+            files = Gem::Package.new(Dir["spellkit-general-medical-*.gem"].first).spec.files
+            %w[data/dictionary.tsv data/protected.txt].each do |needed|
+              abort "gem is missing #{needed}" unless files.include?(needed)
             end
+            puts "gem carries its data (#{files.length} files)"
           '
