@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0
+
+### Added
+- `lazy: true` on `enable_dictionary` and `dictionary_checker`: registers the pack and
+  defers the fetch, disk read and index build until the first real lookup. Eager stays the
+  default, so this is non-breaking. Added because a Rails initializer runs in every process
+  that boots the app, and loading `general_medical` eagerly (~2.1 GB, ~5.5s) OOM-killed a
+  memory-constrained `db:migrate` init container in production.
+- `SpellKit.load_dictionary!` to force a deferred load — for a web-server boot hook, since
+  lazy moves the cost onto the first request rather than removing it.
+- `SpellKit.dictionary_loaded?`.
+
+### Notes
+- `stats` and `healthcheck` do not trigger a deferred load; they report `deferred: true`.
+  A liveness probe must not materialise the index in the process `lazy` protects.
+- An unknown or unreleased pack still raises at boot under `lazy`, not on first use.
+- README documents the Rails-initializer hazard and the measured cost of `edit_distance`
+  (2.1 GB at 2 vs 484 MB at 1).
+
 ## 1.0.0
 
 ### Added

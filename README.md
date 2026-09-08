@@ -15,10 +15,68 @@ gem "spellkit-dictionaries"
 
 ```ruby
 # config/initializers/spellkit.rb
-SpellKit.enable_dictionary(:general_medical)   # <- the one you almost certainly want
+SpellKit.enable_dictionary(:general_medical, lazy: true)   # <- the one you almost certainly want
 
 SpellKit.correct("acetaminphen")  # => "acetaminophen"
 SpellKit.correct("CDK10")         # => "CDK10"  (protected, never "corrected")
+```
+
+## If you are loading this from a Rails initializer, read this
+
+**An initializer runs in every process that boots the app** — the web server, `rails
+db:migrate`, `rake`, `console`, a sidecar — not just the one that searches. By default
+`enable_dictionary` loads the pack eagerly and synchronously, so every one of those
+processes pays the full cost.
+
+That cost is not small. `general_medical` at its default `edit_distance: 2` measures
+**~2.1 GB resident and ~5.5s** to build its index. This has already OOM-killed a
+memory-constrained `db:migrate` init container in production.
+
+Pass `lazy: true`. Registration then costs nothing, and the index is built on the first
+real lookup — which in a migrate or rake process never happens:
+
+```ruby
+SpellKit.enable_dictionary(:general_medical, lazy: true)
+```
+
+Measured, same process, same pack:
+
+| | time | RSS |
+|---|---|---|
+| `enable_dictionary(..., lazy: true)` | 0.000s | +0 MB |
+| first `correct()` after that | 5.5s | +2,076 MB |
+| every later call | ~0.0001s | +0 MB |
+
+**Lazy moves the cost, it does not remove it.** For a web server you usually want the
+*server* to pay it, not the first unlucky user, so warm it explicitly at worker boot:
+
+```ruby
+# config/puma.rb
+on_worker_boot { SpellKit.load_dictionary! }
+```
+
+That gives you both halves: migrate and rake never build the index, and the web server
+builds it before serving traffic.
+
+`stats` and `healthcheck` deliberately **do not** trigger the load — they report
+`{"loaded" => false, "deferred" => true}` instead. A liveness probe must not be able to
+materialise a 2 GB index in the very process `lazy` exists to protect.
+
+```ruby
+SpellKit.dictionary_loaded?   # => false until something forces the load
+SpellKit.load_dictionary!     # force it now; idempotent, no-op when eager
+```
+
+A bad or unreleased pack name still raises at boot even when lazy, so a typo fails where
+it is cheap to notice rather than on a user's first search.
+
+**Memory scales with `edit_distance`, steeply.** The same pack at `edit_distance: 1` is
+**484 MB and 1.0s** — about a quarter the footprint — because SymSpell's deletion index
+grows sharply with distance. It trades recall for it (see [Validation](#validation)), but
+if you are memory-constrained that knob matters more than lazy loading does:
+
+```ruby
+SpellKit.enable_dictionary(:general_medical, lazy: true, edit_distance: 1)
 ```
 
 ## Pack catalog
@@ -71,6 +129,9 @@ files in one cache directory, under one tag, checksum-verified the same way.
 ```ruby
 # A pack, with its own validated tuning
 SpellKit.enable_dictionary(:medical)
+
+# Defer the load until first use - see the Rails note above
+SpellKit.enable_dictionary(:medical, lazy: true)
 
 # Override anything spellkit's load! accepts
 SpellKit.enable_dictionary(:medical, edit_distance: 2)

@@ -8,6 +8,7 @@ require_relative "dictionaries/errors"
 require_relative "dictionaries/pack"
 require_relative "dictionaries/registry"
 require_relative "dictionaries/fetcher"
+require_relative "dictionaries/lazy_checker"
 
 module SpellKit
   # Domain dictionary packs for spellkit.

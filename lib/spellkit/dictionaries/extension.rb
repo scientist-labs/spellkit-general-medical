@@ -17,9 +17,54 @@ module SpellKit
     #
     # Any keyword spellkit's load! accepts may be passed and wins over the pack's own
     # tuned defaults. Returns the configured checker.
-    def enable_dictionary(pack = nil, **options)
-      checker = load!(**Dictionaries.load_options(pack, **options))
+    # Pass `lazy: true` to register the pack without loading it. See LazyChecker for why
+    # that matters in a Rails app; the short version is that an initializer runs in every
+    # process that boots the app, not just the one that searches.
+    #
+    #   SpellKit.enable_dictionary(:general_medical, lazy: true)
+    #
+    # Eager stays the default, so existing callers are unaffected.
+    def enable_dictionary(pack = nil, lazy: false, **options)
+      # Resolve the pack eagerly even when lazy, so a bad name or an unreleased pack
+      # raises at boot where it is cheap to notice, not on a user's first search. This is
+      # a registry lookup only - it does not fetch anything.
       @dictionary_pack = pack.nil? ? nil : Dictionaries.pack(pack)
+      # Fail at boot on an unreleased pack even when lazy. The registry lookup above
+      # SUCCEEDS for one (it is registered, just unpublished), so without this a lazy
+      # caller would deploy clean and blow up on a user's first search instead.
+      @dictionary_pack&.ensure_released! if lazy
+
+      self.default = if lazy
+        Dictionaries::LazyChecker.new(pack, options)
+      else
+        load!(**Dictionaries.load_options(pack, **options))
+      end
+    end
+
+    # True once the default checker holds a real index. A lazily-registered pack reports
+    # false until something forces the load.
+    def dictionary_loaded?
+      checker = @default
+      return false if checker.nil?
+      return checker.loaded? if checker.is_a?(Dictionaries::LazyChecker)
+
+      true
+    end
+
+    # Force a deferred load now. Idempotent, and a no-op for an eagerly-loaded checker.
+    #
+    # Use it in a web-server boot hook when you would rather the server pay the cost than
+    # the first request:
+    #
+    #   # config/puma.rb
+    #   on_worker_boot { SpellKit.load_dictionary! }
+    #
+    # Lazy loading MOVES the cost, it does not remove it. For a web process, moving it
+    # onto a user request is usually the wrong trade; for migrate/rake/console it is
+    # exactly right, and those never call this.
+    def load_dictionary!
+      checker = @default
+      checker.load_now! if checker.is_a?(Dictionaries::LazyChecker)
       checker
     end
 
@@ -29,7 +74,13 @@ module SpellKit
     #
     #   medical = SpellKit.dictionary_checker(:medical)
     #   medical.correct("acetaminphen")
-    def dictionary_checker(pack = nil, **options)
+    def dictionary_checker(pack = nil, lazy: false, **options)
+      resolved = pack.nil? ? nil : Dictionaries.pack(pack)
+      if lazy
+        resolved&.ensure_released!
+        return Dictionaries::LazyChecker.new(pack, options)
+      end
+
       Checker.new.load!(**Dictionaries.load_options(pack, **options))
     end
 

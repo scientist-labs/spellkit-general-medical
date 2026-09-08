@@ -127,12 +127,9 @@ module SpellKit
         )
       end
 
-      private
-
-      def cache_key(asset)
-        File.join(name, release.tag, asset.filename)
-      end
-
+      # PUBLIC so a LAZY caller can fail at boot rather than on a user's first search. The
+      # registry lookup alone SUCCEEDS for an unreleased pack - it is registered, merely
+      # unpublished - and only load_options raises, which lazy defers.
       def ensure_released!
         return if released?
 
@@ -140,6 +137,12 @@ module SpellKit
           "The #{name.inspect} pack is registered but has no published release yet, so there is " \
           "nothing to download. Track it at https://github.com/scientist-labs/spellkit-dictionaries " \
           "or pass your own files: SpellKit.enable_dictionary(dictionary: \"...\", protected_path: \"...\")."
+      end
+
+      private
+
+      def cache_key(asset)
+        File.join(name, release.tag, asset.filename)
       end
     end
   end
